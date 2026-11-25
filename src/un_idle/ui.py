@@ -197,11 +197,13 @@ class TrayController:
         on_save_config: Callable[[AppConfig], None],
         on_toggle_enabled: Callable[[bool], None],
         on_quit: Callable[[], None],
+        engine=None,  # UnIdleEngine instance for pause features
     ) -> None:
         self._get_config = get_config
         self._on_save_config = on_save_config
         self._on_toggle_enabled = on_toggle_enabled
         self._on_quit = on_quit
+        self._engine = engine
         self._tk_root: Optional[tk.Tk] = None
         self._settings_win: Optional[SettingsWindow] = None
         self._icon: Optional[pystray.Icon] = None
@@ -271,6 +273,18 @@ class TrayController:
                 pass
         self._on_quit()
 
+    def _pause_30min(self, icon=None, item=None) -> None:
+        if self._engine:
+            self._engine.pause_for_duration(30)
+    
+    def _pause_1hour(self, icon=None, item=None) -> None:
+        if self._engine:
+            self._engine.pause_for_duration(60)
+    
+    def _pause_until_tomorrow(self, icon=None, item=None) -> None:
+        if self._engine:
+            self._engine.pause_until_tomorrow()
+
     def run(self) -> None:
         self._tk_thread.start()
         self._ready.wait(timeout=3.0)
@@ -281,6 +295,11 @@ class TrayController:
                 self._toggle_enabled,
                 checked=lambda item: self._get_config().enabled,
             ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Pause 30 min", self._pause_30min),
+            pystray.MenuItem("Pause 1 hour", self._pause_1hour),
+            pystray.MenuItem("Pause until tomorrow", self._pause_until_tomorrow),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Settings...", self.request_open_settings, default=True),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._handle_quit),

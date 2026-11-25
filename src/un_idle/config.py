@@ -47,6 +47,38 @@ DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.json"
 VALID_MODES = ("micro-jiggle", "f15", "awake_only")
 
 
+# Preset configurations (applied after AppConfig is defined)
+def get_preset(name: str) -> dict | None:
+    """Get a preset configuration by name as a dict."""
+    presets = {
+        "Reading": {
+            "enabled": True,
+            "mode": "awake_only",
+            "idle_threshold_sec": 180.0,
+            "pulse_interval_sec": 60.0,
+            "jiggle_pixels": 1,
+            "hide_from_capture": True,
+        },
+        "Presentation": {
+            "enabled": True,
+            "mode": "awake_only",
+            "idle_threshold_sec": 30.0,
+            "pulse_interval_sec": 30.0,
+            "jiggle_pixels": 1,
+            "hide_from_capture": True,
+        },
+        "Download": {
+            "enabled": True,
+            "mode": "f15",
+            "idle_threshold_sec": 120.0,
+            "pulse_interval_sec": 60.0,
+            "jiggle_pixels": 1,
+            "hide_from_capture": True,
+        },
+    }
+    return presets.get(name)
+
+
 def _validate_time_string(time_str: str) -> bool:
     """Validate HH:MM format and range."""
     try:

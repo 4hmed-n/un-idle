@@ -82,6 +82,7 @@ def main() -> int:
             on_save_config=apply_cfg,
             on_toggle_enabled=set_enabled,
             on_quit=on_quit,
+            engine=engine,  # Pass engine for pause features
         )
         logger.info("Tray controller initialized")
     except Exception as e:

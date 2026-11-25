@@ -16,6 +16,7 @@ logger = logging.getLogger("un_idle.engine")
 
 class EngineState(str, Enum):
     PAUSED = "paused"
+    TEMP_PAUSED = "temp_paused"  # Temporary pause (timer-based)
     OUT_OF_SCHEDULE = "out_of_schedule"
     MONITORING = "monitoring"
     SIMULATING = "simulating"
@@ -102,7 +103,23 @@ class UnIdleEngine:
         self._state = EngineState.PAUSED if not self._config.enabled else EngineState.MONITORING
         self._stop_event = threading.Event()
         self._last_pulse_time = 0.0
+        self._pause_until = 0.0  # Unix timestamp for temporary pause
         self._thread = threading.Thread(target=self._run_loop, name="UnIdleEngine", daemon=True)
+    
+    def pause_for_duration(self, minutes: int) -> None:
+        """Temporarily pause for specified minutes."""
+        with self._lock:
+            self._pause_until = time.time() + (minutes * 60)
+        logger.info(f"Paused for {minutes} minutes")
+    
+    def pause_until_tomorrow(self) -> None:
+        """Pause until tomorrow at 00:00."""
+        from datetime import datetime, timedelta
+        tomorrow = datetime.now() + timedelta(days=1)
+        midnight = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+        with self._lock:
+            self._pause_until = midnight.timestamp()
+        logger.info(f"Paused until tomorrow ({midnight})")
 
     @property
     def state(self) -> EngineState:
@@ -150,6 +167,14 @@ class UnIdleEngine:
         while not self._stop_event.is_set():
             with self._lock:
                 cfg = self._config
+                pause_until = self._pause_until
+            
+            # Check temporary pause
+            if pause_until > time.time():
+                self._simulator.set_awake_assertion(False)
+                self._set_state(EngineState.TEMP_PAUSED)
+                self._stop_event.wait(1.0)
+                continue
 
             if not cfg.enabled:
                 self._simulator.set_awake_assertion(False)
