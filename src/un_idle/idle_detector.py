@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import platform
 import shutil
 import subprocess
@@ -13,6 +14,8 @@ except Exception:
     mouse = None
     _HAS_PYNPUT = False
 
+logger = logging.getLogger("un_idle.idle_detector")
+
 
 class IdleDetector:
     """Tracks seconds since last user input using OS idle timers with listener fallback."""
@@ -21,6 +24,7 @@ class IdleDetector:
         self._last_listener_event = time.monotonic()
         self._mouse_listener = None
         self._key_listener = None
+        logger.info("IdleDetector initializing")
         self._start_listeners()
 
     def _on_activity(self, *args, **kwargs) -> None:

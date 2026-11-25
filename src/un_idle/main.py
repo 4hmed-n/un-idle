@@ -6,11 +6,22 @@ import threading
 
 from config import AppConfig, load_config, save_config
 from engine import UnIdleEngine
+from logging_config import setup_logging
 from ui import TrayController
 
 
 def main() -> int:
-    cfg = load_config()
+    logger = setup_logging()
+    logger.info("Un-Idle starting")
+    logger.info(f"Python {sys.version}, Platform {sys.platform}")
+    
+    try:
+        cfg = load_config()
+        logger.info(f"Config loaded: mode={cfg.mode}, enabled={cfg.enabled}")
+    except Exception as e:
+        logger.error(f"Failed to load config: {e}")
+        cfg = AppConfig()
+    
     cfg_lock = threading.RLock()
     current_cfg = cfg
     stop_event = threading.Event()
@@ -24,7 +35,11 @@ def main() -> int:
         normalized = updated.normalized()
         with cfg_lock:
             current_cfg = normalized
-        save_config(normalized)
+        try:
+            save_config(normalized)
+            logger.info(f"Config saved: mode={normalized.mode}, enabled={normalized.enabled}")
+        except Exception as e:
+            logger.error(f"Failed to save config: {e}")
         engine.update_config(normalized)
         tray.refresh_icon(active=normalized.enabled)
 
@@ -42,30 +57,45 @@ def main() -> int:
         apply_cfg(next_cfg)
 
     def on_quit() -> None:
+        logger.info("Quit requested")
         stop_event.set()
 
-    engine = UnIdleEngine(get_cfg())
-    tray = TrayController(
-        get_config=get_cfg,
-        on_save_config=apply_cfg,
-        on_toggle_enabled=set_enabled,
-        on_quit=on_quit,
-    )
+    try:
+        engine = UnIdleEngine(get_cfg())
+        logger.info("Engine initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize engine: {e}")
+        return 1
+    
+    try:
+        tray = TrayController(
+            get_config=get_cfg,
+            on_save_config=apply_cfg,
+            on_toggle_enabled=set_enabled,
+            on_quit=on_quit,
+        )
+        logger.info("Tray controller initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize tray: {e}")
+        return 1
 
     def _signal_handler(signum, frame):
+        logger.info(f"Signal {signum} received")
         stop_event.set()
         tray._handle_quit()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             signal.signal(sig, _signal_handler)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Could not set signal handler for {sig}: {e}")
 
     engine.start()
+    logger.info("Engine started, entering main loop")
     try:
         tray.run()
     finally:
+        logger.info("Shutting down")
         engine.stop()
     return 0
 

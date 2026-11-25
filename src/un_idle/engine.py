@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from datetime import datetime
@@ -9,6 +10,8 @@ from typing import Callable, Optional
 from config import AppConfig
 from idle_detector import IdleDetector
 from simulator import ActivitySimulator
+
+logger = logging.getLogger("un_idle.engine")
 
 
 class EngineState(str, Enum):
@@ -121,13 +124,16 @@ class UnIdleEngine:
         changed = False
         with self._lock:
             if self._state != next_state:
+                prev_state = self._state
                 self._state = next_state
                 changed = True
-        if changed and self._on_state_change:
-            try:
-                self._on_state_change(next_state)
-            except Exception:
-                pass
+        if changed:
+            logger.info(f"State transition: {prev_state.value} -> {next_state.value}")
+            if self._on_state_change:
+                try:
+                    self._on_state_change(next_state)
+                except Exception as e:
+                    logger.error(f"State change callback failed: {e}")
 
     def start(self) -> None:
         if not self._thread.is_alive():

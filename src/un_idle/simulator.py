@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import platform
 import subprocess
 import time
@@ -13,6 +14,8 @@ except Exception:
     Key = None
     MouseController = None
     _HAS_PYNPUT_CTRL = False
+
+logger = logging.getLogger("un_idle.simulator")
 
 
 class ActivitySimulator:
@@ -45,14 +48,17 @@ class ActivitySimulator:
                 result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
                 # Check return value - 0 means failure
                 if result == 0:
+                    logger.error("SetThreadExecutionState failed (returned 0)")
                     return False
                 
                 self._awake_asserted = active
                 if active:
                     import threading
                     self._power_thread_id = threading.current_thread().ident
+                logger.info(f"Power assertion {'enabled' if active else 'disabled'} (Windows)")
                 return True
-            except Exception:
+            except Exception as e:
+                logger.error(f"Power assertion failed: {e}")
                 return False
         elif system == "Darwin":
             if active and self._caffeinate_proc is None:
@@ -63,15 +69,18 @@ class ActivitySimulator:
                         stderr=subprocess.DEVNULL,
                     )
                     self._awake_asserted = True
+                    logger.info("Power assertion enabled (macOS caffeinate)")
                     return True
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Failed to start caffeinate: {e}")
                     return False
             elif not active and self._caffeinate_proc is not None:
                 try:
                     self._caffeinate_proc.terminate()
                     self._caffeinate_proc.wait(timeout=2)
-                except Exception:
-                    pass
+                    logger.info("Power assertion disabled (macOS caffeinate)")
+                except Exception as e:
+                    logger.warning(f"Error terminating caffeinate: {e}")
                 finally:
                     self._caffeinate_proc = None
                     self._awake_asserted = False
@@ -79,9 +88,11 @@ class ActivitySimulator:
             return self._awake_asserted
         elif system == "Linux":
             # Linux awake_only is unsupported (no universal API)
+            logger.warning("Power assertion unavailable on Linux")
             return False
         else:
             # Unknown platform
+            logger.warning(f"Power assertion unavailable on {system}")
             return False
 
     def pulse(self, mode: str, jiggle_pixels: int = 1) -> None:
