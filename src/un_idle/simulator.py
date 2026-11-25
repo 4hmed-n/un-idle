@@ -23,11 +23,16 @@ class ActivitySimulator:
         self._keyboard = KeyController() if (_HAS_PYNPUT_CTRL and KeyController) else None
         self._caffeinate_proc: subprocess.Popen | None = None
         self._awake_asserted = False
+        self._power_thread_id = None  # Track power assertion ownership
 
-    def set_awake_assertion(self, active: bool) -> None:
+    def set_awake_assertion(self, active: bool) -> bool:
+        """
+        Set or clear OS power assertion.
+        Returns True if successful, False on failure.
+        """
         system = platform.system()
         if active == self._awake_asserted:
-            return
+            return True
 
         if system == "Windows":
             try:
@@ -36,10 +41,19 @@ class ActivitySimulator:
                 ES_SYSTEM_REQUIRED = 0x00000001
                 ES_DISPLAY_REQUIRED = 0x00000002
                 flags = (ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED) if active else ES_CONTINUOUS
-                ctypes.windll.kernel32.SetThreadExecutionState(flags)
+                
+                result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
+                # Check return value - 0 means failure
+                if result == 0:
+                    return False
+                
                 self._awake_asserted = active
+                if active:
+                    import threading
+                    self._power_thread_id = threading.current_thread().ident
+                return True
             except Exception:
-                pass
+                return False
         elif system == "Darwin":
             if active and self._caffeinate_proc is None:
                 try:
@@ -49,8 +63,9 @@ class ActivitySimulator:
                         stderr=subprocess.DEVNULL,
                     )
                     self._awake_asserted = True
+                    return True
                 except Exception:
-                    pass
+                    return False
             elif not active and self._caffeinate_proc is not None:
                 try:
                     self._caffeinate_proc.terminate()
@@ -60,8 +75,14 @@ class ActivitySimulator:
                 finally:
                     self._caffeinate_proc = None
                     self._awake_asserted = False
+                return True
+            return self._awake_asserted
+        elif system == "Linux":
+            # Linux awake_only is unsupported (no universal API)
+            return False
         else:
-            self._awake_asserted = active
+            # Unknown platform
+            return False
 
     def pulse(self, mode: str, jiggle_pixels: int = 1) -> None:
         if mode == "awake_only":

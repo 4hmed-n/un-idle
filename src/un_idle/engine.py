@@ -16,6 +16,8 @@ class EngineState(str, Enum):
     OUT_OF_SCHEDULE = "out_of_schedule"
     MONITORING = "monitoring"
     SIMULATING = "simulating"
+    DEGRADED = "degraded"  # Partial functionality
+    UNSUPPORTED = "unsupported"  # Feature not available on platform
 
 
 def _parse_hhmm(value: str) -> tuple[int, int] | None:
@@ -33,25 +35,52 @@ def _parse_hhmm(value: str) -> tuple[int, int] | None:
 
 
 def is_within_schedule(cfg: AppConfig, now: datetime | None = None) -> bool:
+    """
+    Check if current time is within the schedule window.
+    
+    - Selected weekdays are START days for the window
+    - For overnight schedules (e.g., Mon 22:00-06:00), Tue 02:00 is IN schedule
+    - Uses half-open interval [start, end)
+    - If start == end, treat as 24/7 (all day)
+    - Invalid time strings fail CLOSED (returns False)
+    """
     sched = cfg.schedule
     if not sched.enabled:
         return True
+    
     current = now or datetime.now()
-    if current.weekday() not in sched.days:
-        return False
-
     start = _parse_hhmm(sched.start_time)
     end = _parse_hhmm(sched.end_time)
+    
+    # Invalid times fail CLOSED
     if not start or not end:
-        return True
-
-    cur_mins = current.hour * 60 + current.minute
+        return False
+    
     start_mins = start[0] * 60 + start[1]
     end_mins = end[0] * 60 + end[1]
-
-    if start_mins <= end_mins:
-        return start_mins <= cur_mins <= end_mins
-    return cur_mins >= start_mins or cur_mins <= end_mins
+    
+    # Equal start/end means 24/7
+    if start_mins == end_mins:
+        return current.weekday() in sched.days
+    
+    cur_mins = current.hour * 60 + current.minute
+    cur_day = current.weekday()
+    
+    # Non-overnight schedule (e.g., 09:00-17:00)
+    if start_mins < end_mins:
+        return cur_day in sched.days and start_mins <= cur_mins < end_mins
+    
+    # Overnight schedule (e.g., 22:00-06:00)
+    # Check if we're in the late part (after start on selected day)
+    if cur_mins >= start_mins and cur_day in sched.days:
+        return True
+    
+    # Check if we're in the early part (before end on day after selected day)
+    prev_day = (cur_day - 1) % 7
+    if cur_mins < end_mins and prev_day in sched.days:
+        return True
+    
+    return False
 
 
 class UnIdleEngine:
@@ -133,6 +162,13 @@ class UnIdleEngine:
 
             idle_sec = self._detector.get_idle_seconds()
             now_mono = time.monotonic()
+            
+            # Ignore idle resets that happen shortly after our own pulses
+            # (within 2 seconds window to account for synthetic event detection)
+            time_since_pulse = now_mono - self._last_pulse_time
+            if time_since_pulse < 2.0 and idle_sec < 2.0:
+                # Likely our own synthetic event, treat as still idle
+                idle_sec = cfg.idle_threshold_sec + 1.0
 
             if idle_sec >= cfg.idle_threshold_sec:
                 self._set_state(EngineState.SIMULATING)
