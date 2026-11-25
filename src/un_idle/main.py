@@ -7,6 +7,7 @@ import threading
 from config import AppConfig, load_config, save_config
 from engine import UnIdleEngine
 from logging_config import setup_logging
+from single_instance import SingleInstanceLock
 from ui import TrayController
 
 
@@ -14,6 +15,12 @@ def main() -> int:
     logger = setup_logging()
     logger.info("Un-Idle starting")
     logger.info(f"Python {sys.version}, Platform {sys.platform}")
+    
+    # Single instance check
+    lock = SingleInstanceLock("un-idle")
+    if not lock.acquire():
+        logger.info("Another instance already running, exiting silently")
+        return 0
     
     try:
         cfg = load_config()
@@ -35,13 +42,15 @@ def main() -> int:
         normalized = updated.normalized()
         with cfg_lock:
             current_cfg = normalized
-        try:
-            save_config(normalized)
-            logger.info(f"Config saved: mode={normalized.mode}, enabled={normalized.enabled}")
-        except Exception as e:
-            logger.error(f"Failed to save config: {e}")
+        
+        # Always apply in memory first
         engine.update_config(normalized)
         tray.refresh_icon(active=normalized.enabled)
+        
+        # Then try to persist
+        if not save_config(normalized):
+            logger.error("Config changes applied in memory but persistence failed")
+            # TODO: Show user notification about save failure
 
     def set_enabled(enabled: bool) -> None:
         cur = get_cfg()
@@ -97,6 +106,7 @@ def main() -> int:
     finally:
         logger.info("Shutting down")
         engine.stop()
+        lock.release()
     return 0
 
 
