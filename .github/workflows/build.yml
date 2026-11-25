@@ -1,0 +1,89 @@
+name: Build and Test Un-Idle
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run unit tests
+        run: PYTHONPATH=src/un_idle pytest -v
+
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build executable with PyInstaller
+        run: pyinstaller --clean --noconfirm un-idle.spec
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: un-idle-windows
+          path: dist/un-idle.exe
+
+  build-macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build binary with PyInstaller
+        run: pyinstaller --clean --noconfirm un-idle.spec
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: un-idle-macos
+          path: dist/un-idle
+
+  build-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install system and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-dev libx11-dev
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build binary with PyInstaller
+        run: pyinstaller --clean --noconfirm un-idle.spec
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: un-idle-linux
+          path: dist/un-idle
