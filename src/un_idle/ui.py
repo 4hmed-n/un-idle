@@ -49,13 +49,20 @@ class SettingsWindow:
 
         self.win = tk.Toplevel(parent) if parent else tk.Tk()
         self.win.title("Un-Idle Settings")
-        self.win.geometry("400x340")
+        self.win.geometry("450x480")
         self.win.resizable(False, False)
 
         self.win.update()
-        apply_capture_exclusion(self.win, enabled=self._working.hide_from_capture)
+        self._initial_capture_state = self._working.hide_from_capture
+        apply_capture_exclusion(self.win, enabled=self._initial_capture_state)
 
         self._build_form()
+    
+    def _cancel(self) -> None:
+        """Cancel and revert live capture exclusion change."""
+        # Revert capture exclusion to initial state
+        apply_capture_exclusion(self.win, enabled=self._initial_capture_state)
+        self.win.destroy()
 
     def _build_form(self) -> None:
         pad = {"padx": 14, "pady": 6}
@@ -100,15 +107,26 @@ class SettingsWindow:
         self.sched_enabled_var = tk.BooleanVar(value=self._working.schedule.enabled)
         ttk.Checkbutton(
             sched_frame, text="Restrict to time window", variable=self.sched_enabled_var
-        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=8, pady=4)
+        ).grid(row=0, column=0, columnspan=7, sticky="w", padx=8, pady=4)
 
         ttk.Label(sched_frame, text="Start (HH:MM):").grid(row=1, column=0, sticky="w", padx=8, pady=4)
         self.start_var = tk.StringVar(value=self._working.schedule.start_time)
-        ttk.Entry(sched_frame, textvariable=self.start_var, width=8).grid(row=1, column=1, padx=4)
+        ttk.Entry(sched_frame, textvariable=self.start_var, width=8).grid(row=1, column=1, columnspan=2, padx=4)
 
-        ttk.Label(sched_frame, text="End (HH:MM):").grid(row=1, column=2, sticky="w", padx=8, pady=4)
+        ttk.Label(sched_frame, text="End (HH:MM):").grid(row=1, column=3, sticky="w", padx=8, pady=4)
         self.end_var = tk.StringVar(value=self._working.schedule.end_time)
-        ttk.Entry(sched_frame, textvariable=self.end_var, width=8).grid(row=1, column=3, padx=4)
+        ttk.Entry(sched_frame, textvariable=self.end_var, width=8).grid(row=1, column=4, columnspan=2, padx=4)
+        
+        # Weekday checkboxes
+        ttk.Label(sched_frame, text="Days:").grid(row=2, column=0, sticky="w", padx=8, pady=4)
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        self.day_vars = []
+        for i, day_name in enumerate(day_names):
+            var = tk.BooleanVar(value=(i in self._working.schedule.days))
+            self.day_vars.append(var)
+            ttk.Checkbutton(sched_frame, text=day_name, variable=var).grid(
+                row=2, column=i+1, padx=2, pady=4
+            )
 
         self.capture_var = tk.BooleanVar(value=self._working.hide_from_capture)
         capture_cb = ttk.Checkbutton(
@@ -124,7 +142,7 @@ class SettingsWindow:
         btn_frame = ttk.Frame(self.win)
         btn_frame.pack(fill="x", padx=14, pady=12)
         ttk.Button(btn_frame, text="Save", command=self._save).pack(side="right", padx=4)
-        ttk.Button(btn_frame, text="Cancel", command=self.win.destroy).pack(side="right", padx=4)
+        ttk.Button(btn_frame, text="Cancel", command=self._cancel).pack(side="right", padx=4)
 
     def _on_capture_toggle(self) -> None:
         apply_capture_exclusion(self.win, enabled=bool(self.capture_var.get()))
@@ -144,6 +162,11 @@ class SettingsWindow:
             jiggle_val = int(self.jiggle_var.get())
         except ValueError:
             jiggle_val = self._working.jiggle_pixels
+        
+        # Collect selected weekdays from checkboxes
+        selected_days = [i for i, var in enumerate(self.day_vars) if var.get()]
+        if not selected_days:
+            selected_days = [0, 1, 2, 3, 4]  # Default to Mon-Fri
 
         updated = AppConfig(
             enabled=bool(self.enabled_var.get()),
@@ -156,7 +179,7 @@ class SettingsWindow:
                 enabled=bool(self.sched_enabled_var.get()),
                 start_time=self.start_var.get().strip() or "09:00",
                 end_time=self.end_var.get().strip() or "18:00",
-                days=list(self._working.schedule.days),
+                days=selected_days,
             ),
         ).normalized()
 
