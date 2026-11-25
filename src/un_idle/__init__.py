@@ -1,3 +1,3 @@
-"""Un-Idle desktop utility package."""
+"""Un-Idle - Prevent system sleep and idle states."""
 
-__version__ = "0.5.0"
+__version__ = "1.1.0"

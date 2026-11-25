@@ -1,0 +1,55 @@
+[project]
+name = "un-idle"
+version = "1.1.0"
+description = "Lightweight desktop utility to prevent system sleep and idle states"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "4hmed-n", email = "217900236+4hmed-n@users.noreply.github.com"}
+]
+keywords = ["idle", "screen-saver", "mouse", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pynput>=1.7.0,<2.0.0",
+    "pystray>=0.19.0,<1.0.0",
+    "Pillow>=10.0.0,<12.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+]
+build = [
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+un-idle = "un_idle.main:main"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["un_idle"]
+package-dir = {"" = "src"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
