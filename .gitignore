@@ -20,6 +20,9 @@ tests/
 .coverage
 htmlcov/
 
+# Kiro specs
+.kiro/
+
 # Logs
 *.log
 
