@@ -7,9 +7,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Callable, Optional
 
-from config import AppConfig
-from idle_detector import IdleDetector
-from simulator import ActivitySimulator
+from un_idle.config import AppConfig
+from un_idle.idle_detector import IdleDetector
+from un_idle.simulator import ActivitySimulator
 
 logger = logging.getLogger("un_idle.engine")
 
@@ -195,9 +195,9 @@ class UnIdleEngine:
             now_mono = time.monotonic()
             
             # Ignore idle resets that happen shortly after our own pulses
-            # (within 2 seconds window to account for synthetic event detection)
+            # (within 3 seconds window to account for synthetic event detection)
             time_since_pulse = now_mono - self._last_pulse_time
-            if time_since_pulse < 2.0 and idle_sec < 2.0:
+            if self._last_pulse_time > 0 and time_since_pulse < 3.0 and idle_sec < 3.0:
                 # Likely our own synthetic event, treat as still idle
                 idle_sec = cfg.idle_threshold_sec + 1.0
 
@@ -207,6 +207,8 @@ class UnIdleEngine:
                     self._simulator.pulse(cfg.mode, cfg.jiggle_pixels)
                     self._last_pulse_time = time.monotonic()
             else:
-                self._set_state(EngineState.MONITORING)
+                # Only stop simulating if idle is genuinely low (not in synthetic window)
+                if time_since_pulse >= 3.0 or self._last_pulse_time == 0:
+                    self._set_state(EngineState.MONITORING)
 
             self._stop_event.wait(0.25)
