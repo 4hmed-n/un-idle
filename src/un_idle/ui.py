@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from typing import Callable, Optional
 
 from PIL import Image, ImageDraw
 import pystray
 
 from capture_guard import apply_capture_exclusion, is_windows_capture_exclusion_supported
-from config import AppConfig, VALID_MODES
+from config import AppConfig, VALID_MODES, get_preset
+from platform_info import get_capabilities, detect_display_server
 
 
 def create_tray_icon_image(active: bool = True, size: int = 64) -> Image.Image:
@@ -49,7 +50,7 @@ class SettingsWindow:
 
         self.win = tk.Toplevel(parent) if parent else tk.Tk()
         self.win.title("Un-Idle Settings")
-        self.win.geometry("450x480")
+        self.win.geometry("500x650")  # Increased size for new elements
         self.win.resizable(False, False)
 
         self.win.update()
@@ -66,6 +67,43 @@ class SettingsWindow:
 
     def _build_form(self) -> None:
         pad = {"padx": 14, "pady": 6}
+
+        # Status section
+        status_frame = ttk.LabelFrame(self.win, text="Status & Capabilities")
+        status_frame.pack(fill="x", padx=14, pady=6)
+        
+        caps = get_capabilities()
+        status_lines = []
+        
+        # Platform detection
+        if caps["platform"] == "Linux":
+            display = detect_display_server()
+            status_lines.append(f"Platform: Linux ({display})")
+            if display == "wayland":
+                status_lines.append("⚠️ Wayland: input simulation may not work, use X11")
+        else:
+            status_lines.append(f"Platform: {caps['platform']}")
+        
+        # Feature capabilities
+        if not caps.get("power_assertion", False):
+            status_lines.append("⚠️ Power assertion unavailable on this platform")
+        
+        if not caps.get("capture_exclusion", False) and caps["platform"] == "Windows":
+            status_lines.append("⚠️ Capture exclusion requires Windows 10 build 19041+")
+        
+        status_text = "\n".join(status_lines) if status_lines else "All features available"
+        ttk.Label(status_frame, text=status_text, justify="left").pack(anchor="w", padx=8, pady=4)
+
+        # Quick Presets section
+        preset_frame = ttk.LabelFrame(self.win, text="Quick Presets")
+        preset_frame.pack(fill="x", padx=14, pady=6)
+        
+        preset_btn_frame = ttk.Frame(preset_frame)
+        preset_btn_frame.pack(padx=8, pady=4)
+        
+        ttk.Button(preset_btn_frame, text="Reading", command=lambda: self._load_preset("Reading")).pack(side="left", padx=4)
+        ttk.Button(preset_btn_frame, text="Presentation", command=lambda: self._load_preset("Presentation")).pack(side="left", padx=4)
+        ttk.Button(preset_btn_frame, text="Download", command=lambda: self._load_preset("Download")).pack(side="left", padx=4)
 
         self.enabled_var = tk.BooleanVar(value=self._working.enabled)
         ttk.Checkbutton(self.win, text="Enable Un-Idle", variable=self.enabled_var).pack(
@@ -143,6 +181,20 @@ class SettingsWindow:
         btn_frame.pack(fill="x", padx=14, pady=12)
         ttk.Button(btn_frame, text="Save", command=self._save).pack(side="right", padx=4)
         ttk.Button(btn_frame, text="Cancel", command=self._cancel).pack(side="right", padx=4)
+    
+    def _load_preset(self, preset_name: str) -> None:
+        """Load a preset configuration into the form."""
+        preset = get_preset(preset_name)
+        if not preset:
+            return
+        
+        self.enabled_var.set(preset.get("enabled", True))
+        self.mode_var.set(preset.get("mode", "micro-jiggle"))
+        self.idle_var.set(str(preset.get("idle_threshold_sec", 45.0)))
+        self.pulse_var.set(str(preset.get("pulse_interval_sec", 20.0)))
+        self.jiggle_var.set(str(preset.get("jiggle_pixels", 1)))
+        self.capture_var.set(preset.get("hide_from_capture", True))
+        apply_capture_exclusion(self.win, enabled=preset.get("hide_from_capture", True))
 
     def _on_capture_toggle(self) -> None:
         apply_capture_exclusion(self.win, enabled=bool(self.capture_var.get()))
@@ -284,6 +336,24 @@ class TrayController:
     def _pause_until_tomorrow(self, icon=None, item=None) -> None:
         if self._engine:
             self._engine.pause_until_tomorrow()
+
+    def show_save_failure_notification(self) -> None:
+        """Show save failure notification to user."""
+        def show_dialog():
+            if self._tk_root:
+                messagebox.showerror(
+                    "Save Failed",
+                    "Settings have been applied but could not be saved to disk. "
+                    "They will be lost when the application restarts.",
+                    parent=self._tk_root
+                )
+        
+        self._ready.wait(timeout=3.0)
+        if self._tk_root is not None:
+            try:
+                self._tk_root.after(0, show_dialog)
+            except Exception:
+                pass
 
     def run(self) -> None:
         self._tk_thread.start()

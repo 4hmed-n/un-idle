@@ -4,11 +4,11 @@ import signal
 import sys
 import threading
 
-from config import AppConfig, load_config, save_config
-from engine import UnIdleEngine
-from logging_config import setup_logging
-from single_instance import SingleInstanceLock
-from ui import TrayController
+from un_idle.config import AppConfig, load_config, save_config
+from un_idle.engine import UnIdleEngine
+from un_idle.logging_config import setup_logging
+from un_idle.single_instance import SingleInstanceLock
+from un_idle.ui import TrayController
 
 
 def main() -> int:
@@ -50,7 +50,11 @@ def main() -> int:
         # Then try to persist
         if not save_config(normalized):
             logger.error("Config changes applied in memory but persistence failed")
-            # TODO: Show user notification about save failure
+            # Show user notification about save failure via tray
+            try:
+                tray.show_save_failure_notification()
+            except Exception as e:
+                logger.error(f"Failed to show save failure notification: {e}")
 
     def set_enabled(enabled: bool) -> None:
         cur = get_cfg()
