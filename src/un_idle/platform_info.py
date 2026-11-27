@@ -43,7 +43,7 @@ def get_capabilities() -> dict[str, bool | str]:
     
     if system == "Windows":
         caps["power_assertion"] = True
-        from capture_guard import is_windows_capture_exclusion_supported
+        from un_idle.capture_guard import is_windows_capture_exclusion_supported
         caps["capture_exclusion"] = is_windows_capture_exclusion_supported()
     elif system == "Darwin":
         caps["power_assertion"] = True  # caffeinate available

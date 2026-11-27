@@ -8,9 +8,9 @@ from typing import Callable, Optional
 from PIL import Image, ImageDraw
 import pystray
 
-from capture_guard import apply_capture_exclusion, is_windows_capture_exclusion_supported
-from config import AppConfig, VALID_MODES, get_preset
-from platform_info import get_capabilities, detect_display_server
+from un_idle.capture_guard import apply_capture_exclusion, is_windows_capture_exclusion_supported
+from un_idle.config import AppConfig, VALID_MODES, get_preset
+from un_idle.platform_info import get_capabilities, detect_display_server
 
 
 def create_tray_icon_image(active: bool = True, size: int = 64) -> Image.Image:
